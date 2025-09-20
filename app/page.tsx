@@ -1,14 +1,53 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { MainMenu } from "@/components/main-menu"
 
 export default function Home() {
   const [showMainMenu, setShowMainMenu] = useState(false)
+  const [comment, setComment] = useState("")
+  const [loading, setLoading] = useState(false)
+
+  // Guardamos el id del intervalo pa cancelarlo si sales del menú
+  useEffect(() => {
+    let intervalId
+
+    if (showMainMenu) {
+      const fetchComment = async () => {
+        try {
+          setLoading(true)
+          const bo = Math.floor(Math.random() * 101)
+          const res = await fetch(`/api/odor?bo=${bo}`, { cache: "no-store" })
+          const data = await res.json()
+          if (!res.ok) throw new Error(data.error || "API error")
+          setComment(data.comment)
+        } catch (e) {
+          setComment(`Error: ${e.message}`)
+        } finally {
+          setLoading(false)
+        }
+      }
+
+      // Llamada inmediata al entrar
+      fetchComment()
+      // Repite cada 5s
+      intervalId = setInterval(fetchComment, 5000)
+    }
+
+    return () => clearInterval(intervalId)
+  }, [showMainMenu])
 
   if (showMainMenu) {
-    return <MainMenu />
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-6 p-8">
+        <MainMenu />
+        <div className="max-w-xl mt-6 p-4 bg-white/90 rounded-lg shadow-lg">
+          <h2 className="text-xl font-bold mb-2">AI Verdict 🤖</h2>
+          {loading ? <p>Loading...</p> : <p>{comment}</p>}
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -16,11 +55,10 @@ export default function Home() {
       {/* Video Background */}
       <video autoPlay muted loop className="absolute inset-0 w-full h-full object-cover z-0">
         <source src="/fragrance-background-video.mp4" type="video/mp4" />
-        {/* Fallback gradient if video doesn't load */}
         <div className="absolute inset-0 bg-gradient-to-br from-background via-card to-muted" />
       </video>
 
-      {/* Dark overlay for better text readability */}
+      {/* Dark overlay */}
       <div className="absolute inset-0 bg-black/40 z-10" />
 
       {/* Centered content */}
