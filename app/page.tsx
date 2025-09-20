@@ -28,7 +28,7 @@ export default function Home() {
         <div className="space-y-6">
           <h1 className="text-6xl md:text-8xl font-bold text-white tracking-tight drop-shadow-2xl">Odor.ly</h1>
           <p className="text-xl md:text-2xl text-white/90 max-w-2xl mx-auto leading-relaxed drop-shadow-lg">
-            {"Discover your perfect scent with our advanced fragrance testing platform"}
+            {"Odor.ly – Detecting Funk Since 2025."}
           </p>
         </div>
 
