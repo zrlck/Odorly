@@ -14,8 +14,37 @@ interface State {
   csv: any[]
   lastUpdate: number
   soundOn: boolean
-  siren: any
   blockchain: boolean
+}
+
+// --- Geiger sound helpers --- //
+function makeClick(ctx: AudioContext) {
+  // short band-limited noise burst to mimic a Geiger click
+  const dur = 0.012
+  const sampleRate = ctx.sampleRate
+  const buffer = ctx.createBuffer(1, Math.floor(dur * sampleRate), sampleRate)
+  const data = buffer.getChannelData(0)
+  for (let i = 0; i < data.length; i++) {
+    // white noise with quick decay
+    const t = i / sampleRate
+    data[i] = (Math.random() * 2 - 1) * Math.exp(-t * 1200)
+  }
+  const noise = ctx.createBufferSource()
+  noise.buffer = buffer
+
+  // Gentle band-pass so it feels like a Geiger tube
+  const bp = ctx.createBiquadFilter()
+  bp.type = "bandpass"
+  bp.frequency.value = 14000
+  bp.Q.value = 2
+
+  const gain = ctx.createGain()
+  gain.gain.value = 0.72
+
+  noise.connect(bp)
+  bp.connect(gain)
+  gain.connect(ctx.destination)
+  noise.start()
 }
 
 export function BoMeter() {
@@ -30,13 +59,19 @@ export function BoMeter() {
     csv: [],
     lastUpdate: Date.now(),
     soundOn: false,
-    siren: null,
     blockchain: false,
   })
 
   const [showToast, setShowToast] = useState(false)
   const [toastMessage, setToastMessage] = useState("TOXIC BO DETECTED 🔥")
-  const intervalRef = useRef<NodeJS.Timeout>()
+
+  // timers (browser setInterval/setTimeout -> number)
+  const intervalRef = useRef<number | null>(null)
+  const geigerTimeoutRef = useRef<number | null>(null)
+
+  // audio
+  const audioCtxRef = useRef<AudioContext | null>(null)
+  const tickCountRef = useRef(0) // counts per rolling window
 
   // Helper functions
   const randn = (mu = 0, sigma = 1) => {
@@ -63,19 +98,17 @@ export function BoMeter() {
       const newPBO = clamp(prevState.pBO + (naturalBO - prevState.pBO) * 0.2, 0, 1)
 
       const ts = Date.now()
-      const newCSV = [
-        ...prevState.csv,
-        {
-          timestamp: new Date(ts).toISOString(),
-          iaq: newIAQ.toFixed(2),
-          temp: newTemp.toFixed(2),
-          humidity: newHum.toFixed(2),
-          gas_ohm: Math.round(newGas),
-          acc: newAcc,
-          p_bo: (newPBO * 100).toFixed(1),
-        },
-      ]
+      const newEntry = {
+        timestamp: new Date(ts).toISOString(),
+        iaq: newIAQ.toFixed(2),
+        temp: newTemp.toFixed(2),
+        humidity: newHum.toFixed(2),
+        gas_ohm: Math.round(newGas),
+        acc: newAcc,
+        p_bo: (newPBO * 100).toFixed(1),
+      }
 
+      const newCSV = [...prevState.csv, newEntry]
       if (newCSV.length > 1000) newCSV.shift()
 
       return {
@@ -93,61 +126,100 @@ export function BoMeter() {
     })
   }
 
-  const playSiren = () => {
-    if (state.siren || !state.soundOn) return
-    try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
-      const osc = ctx.createOscillator()
-      const gain = ctx.createGain()
-      osc.type = "sawtooth"
-      osc.connect(gain)
-      gain.connect(ctx.destination)
-      gain.gain.value = 0.02
-      osc.start()
+  // --- Geiger scheduler (Poisson process) --- //
+  const scheduleNextGeiger = (rateCPS: number) => {
+    // avoid division by zero
+    const r = Math.max(0.01, rateCPS)
+    // exponential inter-arrival (seconds)
+    const dtSec = -Math.log(1 - Math.random()) / r
+    const dtMs = Math.max(8, Math.floor(dtSec * 1000))
 
-      let up = true
-      const base = 440
-      const id = setInterval(() => {
-        osc.frequency.value = up ? base * 1.6 : base * 0.8
-        up = !up
-      }, 300)
+    if (geigerTimeoutRef.current) window.clearTimeout(geigerTimeoutRef.current)
+    geigerTimeoutRef.current = window.setTimeout(() => {
+      // play click
+      if (audioCtxRef.current) makeClick(audioCtxRef.current)
+      // flash UI counter
+      tickCountRef.current += 1
+      // reschedule using current state (rate may change)
+      const nextRate = computeGeigerRate()
+      scheduleNextGeiger(nextRate)
+    }, dtMs)
+  }
 
-      setState((prev) => ({ ...prev, siren: { ctx, osc, gain, id } }))
-    } catch (e) {
-      console.log("[v0] Audio context not available")
+  const computeGeigerRate = () => {
+    // Base clicks per second + scaled by BO probability
+    // Feel free to tweak these numbers for vibe
+    const bo = state.pBO * 100 // 0..100
+    const base = 0.8 // idle chatter
+    const k = 0.06 // intensity coupling
+    // add a bit of jitter so it feels organic even at steady BO
+    const jitter = (Math.random() - 0.5) * 0.2
+    return Math.max(0, base + k * bo + jitter)
+  }
+
+  // Start/stop geiger based on sound toggle
+  useEffect(() => {
+    if (state.soundOn) {
+      try {
+        if (!audioCtxRef.current) audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
+        scheduleNextGeiger(computeGeigerRate())
+      } catch (e) {
+        console.log("[v0] AudioContext not available")
+      }
+    } else {
+      if (geigerTimeoutRef.current) window.clearTimeout(geigerTimeoutRef.current)
+      geigerTimeoutRef.current = null
     }
-  }
+    return () => {
+      if (geigerTimeoutRef.current) window.clearTimeout(geigerTimeoutRef.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.soundOn])
 
-  const stopSiren = () => {
-    if (!state.siren) return
-    clearInterval(state.siren.id)
-    try {
-      state.siren.osc.stop()
-      state.siren.ctx.close()
-    } catch (e) {}
-    setState((prev) => ({ ...prev, siren: null }))
-  }
+  // When BO changes, speed up/slow down the clicks smoothly
+  useEffect(() => {
+    if (!state.soundOn) return
+    const next = computeGeigerRate()
+    scheduleNextGeiger(next)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.pBO])
 
+  // Toast logic (visual only now; siren removed)
   useEffect(() => {
     const boPct = state.pBO * 100
     if (boPct >= 66) {
       setShowToast(true)
-      if (state.soundOn) playSiren()
     } else {
       setShowToast(false)
-      stopSiren()
     }
-  }, [state.pBO, state.soundOn])
+  }, [state.pBO])
 
+  // Sampling loop
   useEffect(() => {
     const tick = () => nextSample()
-    tick() // initial
-    intervalRef.current = setInterval(tick, 2000 + Math.random() * 600)
-
+    tick()
+    intervalRef.current = window.setInterval(tick, 2000 + Math.random() * 600)
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current)
-      stopSiren()
+      if (intervalRef.current) window.clearInterval(intervalRef.current)
+      if (geigerTimeoutRef.current) window.clearTimeout(geigerTimeoutRef.current)
     }
+  }, [])
+
+  // rolling CPS/CPM display
+  const [counters, setCounters] = useState({ cps: 0, cpm: 0 })
+  const lastCounterReset = useRef<number>(Date.now())
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const now = Date.now()
+      const deltaSec = (now - lastCounterReset.current) / 1000
+      const cps = tickCountRef.current / Math.max(1, deltaSec)
+      const cpm = cps * 60
+      setCounters({ cps: Number(cps.toFixed(1)), cpm: Math.round(cpm) })
+      // decay the bucket so it doesn’t explode
+      tickCountRef.current = Math.max(0, tickCountRef.current - Math.round(cps))
+      lastCounterReset.current = now
+    }, 1000)
+    return () => window.clearInterval(id)
   }, [])
 
   const boPct = state.pBO * 100
@@ -171,7 +243,7 @@ export function BoMeter() {
   const downloadCSV = () => {
     const header = "timestamp,iaq,temp,humidity,gas_ohm,acc,p_bo"
     const rows = state.csv.map((o) => Object.values(o).join(","))
-    const blob = new Blob([[header, ...rows].join("\n"), { type: "text/csv" }])
+    const blob = new Blob([header + "\n" + rows.join("\n")], { type: "text/csv" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
@@ -188,11 +260,21 @@ export function BoMeter() {
     }))
     setToastMessage("SPRITZ TEST: Odor cloud deployed 💨")
     setShowToast(true)
-    setTimeout(() => {
+    window.setTimeout(() => {
       setShowToast(false)
       setToastMessage("TOXIC BO DETECTED 🔥")
     }, 1500)
   }
+
+  // tiny LED flash synced to geiger clicks (CSS animation re-trigger via key)
+  const [ledKey, setLedKey] = useState(0)
+  useEffect(() => {
+    // poll every ~120ms: if there were recent ticks, flash
+    const id = window.setInterval(() => {
+      if (tickCountRef.current > 0) setLedKey((k) => k + 1)
+    }, 120)
+    return () => window.clearInterval(id)
+  }, [])
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100">
@@ -212,27 +294,17 @@ export function BoMeter() {
         </span>
 
         <div className="ml-auto flex gap-2 flex-wrap">
-          <Button size="sm" onClick={() => document.documentElement.requestFullscreen?.()}>
-            Presentation Mode
-          </Button>
-          <Button size="sm" onClick={spritzTest}>
-            Spritz Test
-          </Button>
-          <Button size="sm" onClick={downloadCSV}>
-            Download CSV
-          </Button>
+          <Button size="sm" onClick={() => document.documentElement.requestFullscreen?.()}>Presentation Mode</Button>
+          <Button size="sm" onClick={spritzTest}>Spritz Test</Button>
+          <Button size="sm" onClick={downloadCSV}>Download CSV</Button>
           <Button size="sm" onClick={() => setState((prev) => ({ ...prev, soundOn: !prev.soundOn }))}>
-            Sound: {state.soundOn ? "On" : "Off"}
+            Sound: {state.soundOn ? "Geiger" : "Off"}
           </Button>
           <Button size="sm" onClick={() => setState((prev) => ({ ...prev, blockchain: !prev.blockchain }))}>
             {state.blockchain ? "Disable" : "Enable"} Blockchain Mode
           </Button>
-          <Button size="sm" onClick={() => setState((prev) => ({ ...prev, pBO: clamp(prev.pBO - 0.1, 0, 1) }))}>
-            BO −
-          </Button>
-          <Button size="sm" onClick={() => setState((prev) => ({ ...prev, pBO: clamp(prev.pBO + 0.1, 0, 1) }))}>
-            BO +
-          </Button>
+          <Button size="sm" onClick={() => setState((prev) => ({ ...prev, pBO: clamp(prev.pBO - 0.1, 0, 1) }))}>BO −</Button>
+          <Button size="sm" onClick={() => setState((prev) => ({ ...prev, pBO: clamp(prev.pBO + 0.1, 0, 1) }))}>BO +</Button>
         </div>
       </header>
 
@@ -294,6 +366,21 @@ export function BoMeter() {
               <div className="text-xl font-extrabold">{state.acc}/3</div>
             </div>
           </div>
+
+          {/* Geiger indicators */}
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="bg-slate-900 border border-white/10 rounded-xl p-3 flex items-center justify-between">
+              <div>
+                <div className="text-slate-400 text-xs uppercase tracking-wider mb-1">CPS / CPM</div>
+                <div className="text-xl font-extrabold">{counters.cps} cps · {counters.cpm} cpm</div>
+              </div>
+              <div key={ledKey} className="w-3 h-3 rounded-full bg-emerald-400 shadow-[0_0_16px_rgba(16,185,129,0.9)] animate-ping"></div>
+            </div>
+            <div className="bg-slate-900 border border-white/10 rounded-xl p-3">
+              <div className="text-slate-400 text-xs uppercase tracking-wider mb-1">Geiger Rate</div>
+              <div className="text-xl font-extrabold">{computeGeigerRate().toFixed(2)} cps</div>
+            </div>
+          </div>
         </section>
 
         {/* Smell Intensity Card */}
@@ -306,9 +393,7 @@ export function BoMeter() {
             />
           </div>
           <div className="mt-2 text-lg font-bold">Strength: {strength}</div>
-          <div className="text-slate-400 text-sm mt-1">
-            Based on IAQ values. Low = fresh, Medium = noticeable, Strong = intense odor.
-          </div>
+          <div className="text-slate-400 text-sm mt-1">Based on IAQ values. Low = fresh, Medium = noticeable, Strong = intense odor.</div>
         </section>
 
         {/* Logs Card */}
@@ -318,7 +403,7 @@ export function BoMeter() {
             {state.csv
               .slice(-10)
               .map(
-                (entry, i) =>
+                (entry) =>
                   `[${new Date(entry.timestamp).toLocaleTimeString()}] BO=${entry.p_bo}%  Strength=${strength}  IAQ=${entry.iaq}  Temp=${entry.temp}°C  RH=${entry.humidity}%  Gas=${entry.gas_ohm}Ω\n`,
               )
               .join("")}
