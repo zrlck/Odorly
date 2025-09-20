@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BO‑o‑Meter (Mock)</title>
+  <style>
+    :root{ --bg:#0b0d10; --card:#12161b; --muted:#8a97a6; --fg:#e7edf3; --ok:#26c281; --warn:#f5a623; --bad:#ff4d4f; --accent:#7c5cff; }
+    *{ box-sizing:border-box; font-family: ui-rounded, system-ui, -apple-system, Segoe UI, Roboto, "SF Pro", sans-serif; }
+    body{ margin:0; background:var(--bg); color:var(--fg);} 
+    header{ display:flex; gap:16px; align-items:center; padding:18px 22px; border-bottom:1px solid #ffffff14; position:sticky; top:0; backdrop-filter: blur(8px); background: #0b0d10cc; }
+    header h1{ font-size:20px; margin:0; letter-spacing:0.3px; }
+    .pill{ padding:6px 10px; border-radius:999px; font-weight:600; font-size:13px; display:inline-flex; align-items:center; gap:6px; }
+    .wifi{ width:18px; height:12px; border:2px solid currentColor; border-top:0; border-radius:0 0 12px 12px; position:relative; }
+    .wifi::before,.wifi::after{ content:""; position:absolute; bottom:-2px; left:50%; transform:translateX(-50%); height:2px; background:currentColor; }
+    .wifi::before{ width:70%; opacity:.7 }
+    .wifi::after{ width:30%; opacity:.4 }
+    .wrap{ max-width:1100px; margin: 18px auto; padding: 0 16px; display:grid; grid-template-columns: 1.1fr 0.9fr; gap:16px; }
+    @media (max-width: 980px){ .wrap{ grid-template-columns: 1fr; }}
+    .card{ background:var(--card); border:1px solid #ffffff12; border-radius:16px; padding:16px; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+    .title{ font-size:14px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin-bottom:8px; }
+    .big{ font-size:42px; font-weight:800; }
+    button{ background:#1b2330; color:var(--fg); border:1px solid #ffffff1f; padding:10px 14px; border-radius:12px; cursor:pointer; font-weight:600; }
+    button:hover{ filter:brightness(1.15) }
+    .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .badge{ display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; font-weight:700; font-size:13px; }
+    .fresh{ background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+    .funky{ background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+    .toxic{ background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100%{ filter: brightness(1); } 50%{ filter: brightness(1.5); } }
+
+    /* Gauge */
+    .gauge{ width:100%; aspect-ratio: 2 / 1; display:block; }
+    #gauge-needle{ transform-box: fill-box; transform-origin: 50% 100%; transition: transform .12s linear; filter: drop-shadow(0 0 2px #0006);} 
+
+    /* Readout grid */
+    .grid{ display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; }
+    @media (max-width: 640px){ .grid{ grid-template-columns: repeat(2, 1fr); }}
+    .metric{ background:#0f1319; border:1px solid #ffffff12; border-radius:12px; padding:12px; }
+    .metric .label{ color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; }
+    .metric .val{ font-size:20px; font-weight:800; }
+
+    .bar{ height:18px; background:#0f1319; border-radius:999px; overflow:hidden; border:1px solid #ffffff12; }
+    .bar > div{ height:100%; background:linear-gradient(90deg, var(--ok), var(--warn), var(--bad)); transition:width .3s ease; }
+
+    .foot{ color:var(--muted); font-size:12px; }
+    .toast{ position:fixed; right:14px; bottom:14px; background:#0f1319; border:1px solid #ffffff22; color:var(--fg); padding:12px 14px; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.4); opacity:0; transform: translateY(10px); transition: all .25s ease; pointer-events:none; }
+    .toast.show{ opacity:1; transform: translateY(0); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🧪 BO‑o‑Meter (Mock)</h1>
+    <span id="statusBadge" class="pill fresh">🟢 Fresh</span>
+    <span class="pill" title="Mock Wi‑Fi">
+      <span class="wifi"></span>
+      <span id="rssi">‑55 dBm</span>
+    </span>
+    <span class="pill" title="Last update"><span>⏱</span><span id="updated">—</span></span>
+    <div style="margin-left:auto" class="row">
+      <button id="presentation">Presentation Mode</button>
+      <button id="spritz">Spritz Test</button>
+      <button id="csv">Download CSV</button>
+      <button id="sound">Sound: Off</button>
+      <button id="blockchain">Enable Blockchain Mode</button>
+      <button id="boDown">BO −</button>
+      <button id="boUp">BO +</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="card">
+      <div class="title">BO‑o‑Meter</div>
+      <svg class="gauge" id="gauge" viewBox="0 0 100 50" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="ggrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="var(--ok)" />
+            <stop offset="50%" stop-color="var(--warn)" />
+            <stop offset="100%" stop-color="var(--bad)" />
+          </linearGradient>
+        </defs>
+        <path d="M 0 50 A 50 50 0 0 1 100 50 L 0 50 Z" fill="url(#ggrad)" opacity="0.85"/>
+        <rect id="gauge-needle" x="49.1" y="6" width="1.8" height="44" rx="1" fill="#fff" />
+        <circle cx="50" cy="50" r="2.8" fill="#fff" />
+      </svg>
+      <div style="display:flex; align-items:baseline; gap:8px; margin-top:10px;">
+        <div class="big" id="boVal">0%</div><div>BO Probability</div>
+      </div>
+      <div class="grid" style="margin-top:10px;">
+        <div class="metric"><div class="label">Temp</div><div class="val"><span id="temp">—</span> °C</div></div>
+        <div class="metric"><div class="label">Humidity</div><div class="val"><span id="hum">—</span> %</div></div>
+        <div class="metric"><div class="label">Gas Ω</div><div class="val"><span id="gas">—</span></div></div>
+        <div class="metric"><div class="label">IAQ Acc</div><div class="val"><span id="acc">0</span>/3</div></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="title">Smell Intensity</div>
+      <div class="bar"><div id="intensityBar" style="width:0%"></div></div>
+      <div style="margin-top:8px; font-size:18px; font-weight:700;">Strength: <span id="strength">—</span></div>
+      <div class="foot">Based on IAQ values. Low = fresh, Medium = noticeable, Strong = intense odor.</div>
+    </section>
+
+    <section class="card" style="grid-column: 1 / -1;">
+      <div class="title">Logs</div>
+      <pre id="log" style="white-space:pre-wrap; max-height:200px; overflow:auto; background:#0f1319; border-radius:12px; padding:10px; border:1px solid #ffffff12"></pre>
+    </section>
+  </main>
+
+  <div id="toast" class="toast">TOXIC BO DETECTED 🔥</div>
+
+  <script>
+  // ===== State =====
+  const state = {
+    iaq: 25, targetIAQ: 25,
+    temp: 24.5, hum: 45, gas: 80000, acc: 0,
+    pBO: 0.05,
+    csv: [], lastUpdate: Date.now(),
+    soundOn: false, siren: null, blockchain: false
+  };
+
+  // ===== Helpers =====
+  function randn(mu=0, sigma=1){ let u = 1 - Math.random(); let v = Math.random(); return mu + sigma * Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+  function clamp(x, lo, hi){ return Math.min(hi, Math.max(lo, x)); }
+
+  // ===== Mock generator =====
+  function nextSample(){
+    const drift = randn(0, 1.2);
+    state.targetIAQ = clamp(state.targetIAQ + drift, 5, 180);
+    if (Math.random() < 0.06) state.targetIAQ = clamp(state.targetIAQ + 25 + Math.random()*40, 10, 200);
+    state.iaq = state.iaq + (state.targetIAQ - state.iaq) * 0.18;
+
+    state.temp = clamp(state.temp + randn(0, 0.05), 21, 29);
+    state.hum  = clamp(state.hum  + randn(0, 0.4), 25, 70);
+    state.gas  = clamp(state.gas  + randn(0, 5000), 20000, 200000);
+    state.acc  = (state.acc < 3 && Math.random() < 0.2) ? state.acc+1 : state.acc;
+
+    // pBO naturally follows IAQ but can be nudged by buttons
+    const naturalBO = clamp((state.iaq-20)/160, 0, 1);
+    // Blend current pBO toward naturalBO to keep it lively
+    state.pBO = clamp(state.pBO + (naturalBO - state.pBO)*0.2, 0, 1);
+
+    const ts = Date.now();
+    state.lastUpdate = ts;
+
+    // CSV row
+    state.csv.push({
+      timestamp: new Date(ts).toISOString(),
+      iaq: state.iaq.toFixed(2), temp: state.temp.toFixed(2),
+      humidity: state.hum.toFixed(2), gas_ohm: Math.round(state.gas), acc: state.acc,
+      p_bo: (state.pBO*100).toFixed(1)
+    });
+    if (state.csv.length > 1000) state.csv.shift();
+  }
+
+  // ===== Elements =====
+  const needle = document.getElementById('gauge-needle');
+  const boVal = document.getElementById('boVal');
+  const statusBadge = document.getElementById('statusBadge');
+  const tempEl = document.getElementById('temp');
+  const humEl = document.getElementById('hum');
+  const gasEl = document.getElementById('gas');
+  const accEl = document.getElementById('acc');
+  const updatedEl = document.getElementById('updated');
+  const rssiEl = document.getElementById('rssi');
+  const logEl = document.getElementById('log');
+  const toast = document.getElementById('toast');
+  const intensityBar = document.getElementById('intensityBar');
+  const strengthEl = document.getElementById('strength');
+
+  // ===== UI Update =====
+  function updateUI(){
+    // Gauge driven by pBO
+    const boPct = state.pBO * 100;
+    const deg = -90 + (boPct/100)*180; // map 0..100 -> -90..+90
+    needle.style.transform = `rotate(${deg}deg)`;
+    boVal.textContent = boPct.toFixed(1) + "%";
+
+    // Top badge from BO%
+    let txt = '🟢 Fresh', cls='fresh';
+    if (boPct >= 33 && boPct < 66){ txt = '🟡 Funky'; cls='funky'; }
+    else if (boPct >= 66){ txt = '🔴 TOXIC BO DETECTED'; cls='toxic'; }
+    statusBadge.textContent = txt; statusBadge.className = `pill ${cls}`;
+
+    // Intensity (from IAQ)
+    const intensity = clamp(state.iaq/200*100, 0, 100);
+    intensityBar.style.width = intensity.toFixed(0) + "%";
+    let strength = 'Low';
+    if (state.iaq >= 50 && state.iaq < 100) strength = 'Medium';
+    else if (state.iaq >= 100) strength = 'Strong';
+    strengthEl.textContent = strength;
+
+    // Readouts
+    tempEl.textContent = state.temp.toFixed(1);
+    humEl.textContent = state.hum.toFixed(1);
+    gasEl.textContent = state.gas.toLocaleString();
+    accEl.textContent = state.acc;
+
+    // Timestamps and RSSI
+    updatedEl.textContent = new Date(state.lastUpdate).toLocaleTimeString();
+    const rssi = -40 - Math.round(Math.random()*35);
+    rssiEl.textContent = `${rssi} dBm`;
+
+    // Logs
+    const line = `[${new Date(state.lastUpdate).toLocaleTimeString()}] BO=${boPct.toFixed(1)}%  Strength=${strength}  IAQ=${state.iaq.toFixed(1)}  Temp=${state.temp.toFixed(1)}°C  RH=${state.hum.toFixed(1)}%  Gas=${Math.round(state.gas)}Ω`;
+    logEl.textContent = (logEl.textContent + '\n' + line).trim();
+    logEl.scrollTop = logEl.scrollHeight;
+
+    // Alerts + sound
+    if (boPct >= 66){ toast.classList.add('show'); if (state.soundOn) playSiren(); } else { toast.classList.remove('show'); stopSiren(); }
+  }
+
+  // ===== Controls =====
+  document.getElementById('spritz').onclick = ()=>{
+    state.targetIAQ = clamp(state.iaq + 60 + Math.random()*40, 0, 200); // spike intensity
+    state.pBO = clamp(state.pBO + 0.25, 0, 1); // also spike BO probability a bit
+    toast.textContent = 'SPRITZ TEST: Odor cloud deployed 💨';
+    toast.classList.add('show'); setTimeout(()=>{ toast.classList.remove('show'); toast.textContent = 'TOXIC BO DETECTED 🔥';}, 1500);
+  };
+
+  document.getElementById('csv').onclick = ()=>{
+    const header = Object.keys(state.csv[0]||{timestamp:'',iaq:'',temp:'',humidity:'',gas_ohm:'',acc:'',p_bo:''}).join(',');
+    const rows = state.csv.map(o=> Object.values(o).join(','));
+    const blob = new Blob([[header, ...rows].join('\n')], { type:'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = Object.assign(document.createElement('a'), { href:url, download:'bo-ometer-log.csv' });
+    a.click(); URL.revokeObjectURL(url);
+  };
+
+  document.getElementById('presentation').onclick = ()=>{ document.body.requestFullscreen?.(); toast.textContent = 'Presentation mode: Press ESC to exit'; toast.classList.add('show'); setTimeout(()=>toast.classList.remove('show'), 1500); };
+  document.getElementById('sound').onclick = (e)=>{ state.soundOn = !state.soundOn; e.target.textContent = `Sound: ${state.soundOn? 'On':'Off'}`; if (!state.soundOn) stopSiren(); };
+  document.getElementById('blockchain').onclick = (e)=>{ state.blockchain = !state.blockchain; e.target.textContent = state.blockchain ? 'Disable Blockchain Mode' : 'Enable Blockchain Mode'; toast.textContent = state.blockchain ? '🧱 Blockchain‑Backed BO hashes enabled' : 'Blockchain disabled (gas fees too high)'; toast.classList.add('show'); setTimeout(()=>toast.classList.remove('show'), 1600); };
+
+  // New: Manual BO adjusters
+  document.getElementById('boUp').onclick = ()=>{ state.pBO = clamp(state.pBO + 0.10, 0, 1); updateUI(); };
+  document.getElementById('boDown').onclick = ()=>{ state.pBO = clamp(state.pBO - 0.10, 0, 1); updateUI(); };
+
+  // ===== Siren (Web Audio) =====
+  function playSiren(){
+    if (state.siren) return; // already on
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth'; osc.connect(gain); gain.connect(ctx.destination);
+    gain.gain.value = 0.02; osc.start();
+    let up = true; const base = 440;
+    state.siren = { ctx, osc, gain, id: setInterval(()=>{ osc.frequency.value = up ? base*1.6 : base*0.8; up = !up; }, 300)};
+  }
+  function stopSiren(){ if (!state.siren) return; clearInterval(state.siren.id); try{ state.siren.osc.stop(); state.siren.ctx.close(); }catch{} state.siren = null; }
+
+  // ===== Main loop =====
+  function tick(){ nextSample(); updateUI(); }
+  tick(); // initial
+  setInterval(tick, 2000 + Math.random()*600); // every ~2–2.6s
+  </script>
+</body>
+</html>
