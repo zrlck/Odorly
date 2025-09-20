@@ -49,7 +49,7 @@ export function MainMenu() {
             <section className="text-center space-y-6">
               <h2 className="text-4xl font-bold text-foreground text-balance">About Odor.ly</h2>
               <p className="text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-                {"Revolutionizing the way people discover and experience fragrances through technology and expertise."}
+                {"Revolutionizing the way people realize they stink — using janky sensors, questionable code, and zero expertise."}
               </p>
             </section>
 
@@ -58,12 +58,12 @@ export function MainMenu() {
                 <h3 className="text-2xl font-semibold text-primary">Our Mission</h3>
                 <p className="text-muted-foreground leading-relaxed">
                   {
-                    "At Odor.ly, we believe that finding the perfect fragrance should be a personalized, scientific, and delightful experience. Our mission is to bridge the gap between traditional perfumery and modern technology, making fragrance discovery accessible to everyone."
+                    "At Odor.ly, our mission is to detect the world’s most powerful smells — from suspicious leftovers to questionable roommates — and bring science to the funk. We believe every stench tells a story, and we’re here to translate it… one beep at a time."
                   }
                 </p>
                 <p className="text-muted-foreground leading-relaxed">
                   {
-                    "We combine advanced scent analysis algorithms with expert curation to provide you with fragrance recommendations that truly match your unique preferences and lifestyle."
+                    "We combine half-baked smell detection code with our unmatched ability to roast stinky people, giving you recommendations that perfectly match your unique funk and questionable lifestyle."
                   }
                 </p>
               </div>
@@ -90,25 +90,25 @@ export function MainMenu() {
                   <div>
                     <h4 className="font-semibold text-foreground">Innovation</h4>
                     <p className="text-sm text-muted-foreground">
-                      {"Continuously pushing the boundaries of fragrance technology and analysis."}
+                      {"Continuously pushing the boundaries of how bad someone can smell, with technology that barely works and analysis done by our traumatized noses."}
                     </p>
                   </div>
                   <div>
                     <h4 className="font-semibold text-foreground">Personalization</h4>
                     <p className="text-sm text-muted-foreground">
-                      {"Every recommendation is tailored to your unique scent profile and preferences."}
+                      {"Every recommendation is tailored to your unique scent profile — whether that’s gym socks, instant ramen breath, or straight-up ‘computer science major’ vibes."}
                     </p>
                   </div>
                   <div>
                     <h4 className="font-semibold text-foreground">Quality</h4>
                     <p className="text-sm text-muted-foreground">
-                      {"Partnering only with premium fragrance houses and certified perfumers."}
+                      {"Partnering only with premium dumpsters and certified experts in identifying mystery smells."}
                     </p>
                   </div>
                   <div>
                     <h4 className="font-semibold text-foreground">Accessibility</h4>
                     <p className="text-sm text-muted-foreground">
-                      {"Making luxury fragrance discovery available to everyone, everywhere."}
+                      {"Making the discovery of who stinks like shit available to everyone, everywhere."}
                     </p>
                   </div>
                 </div>
@@ -122,7 +122,7 @@ export function MainMenu() {
             <section className="text-center space-y-6">
               <h2 className="text-4xl font-bold text-foreground text-balance">Get in Touch</h2>
               <p className="text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-                {"Have questions about our fragrance testing platform? We'd love to hear from you."}
+                {"Have questions about our totally legit stink-detection platform? We’d love to ignore your email."}
               </p>
             </section>
 
@@ -131,7 +131,7 @@ export function MainMenu() {
                 <CardHeader>
                   <CardTitle>Contact Information</CardTitle>
                   <CardDescription>
-                    {"Reach out to our team for support, partnerships, or general inquiries."}
+                    {"Please do not reach out to our team for support, partnerships, or general inquiries. We don't know how to remove this page."}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
