@@ -15,7 +15,7 @@ export default function Home() {
     <div className="relative min-h-screen flex items-center justify-center overflow-hidden">
       {/* Video Background */}
       <video autoPlay muted loop className="absolute inset-0 w-full h-full object-cover z-0">
-        <source src="/public/fragrance-background-video.mp4" type="video/mp4" />
+        <source src="/fragrance-background-video.mp4" type="video/mp4" />
         {/* Fallback gradient if video doesn't load */}
         <div className="absolute inset-0 bg-gradient-to-br from-background via-card to-muted" />
       </video>
